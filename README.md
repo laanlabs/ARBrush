@@ -8,3 +8,4 @@ and:
 
 NOTE: This is experimental code! ..I'm just learning swift.
 
+![Alt text](anim.gif)
