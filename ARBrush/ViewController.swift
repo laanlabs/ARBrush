@@ -50,6 +50,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     var splitLine = false
     var lineRadius : Float = 0.001
     
+    var metalLayer: CAMetalLayer! = nil
+    var hasSetupPipeline = false
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -65,6 +68,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         
         // Set the scene to the view
         sceneView.scene = scene
+        
+        metalLayer = self.sceneView.layer as! CAMetalLayer
+        
         
         //addButton()
         
@@ -104,7 +110,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         // Run the view's session
         sceneView.session.run(configuration)
         
-        vertBrush.setupPipeline(device: sceneView.device!)
+        //vertBrush.setupPipeline(device: sceneView.device!, pixelFormat: self.metalLayer.pixelFormat )
         
     }
     
@@ -219,6 +225,12 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     }
     
     func renderer(_ renderer: SCNSceneRenderer, didRenderScene scene: SCNScene, atTime time: TimeInterval) {
+        
+        if ( !hasSetupPipeline ) {
+            // pixelFormat is different if called at viewWillAppear
+            hasSetupPipeline = true
+            vertBrush.setupPipeline(device: sceneView.device!, pixelFormat: self.metalLayer.pixelFormat )
+        }
         
         if let commandQueue = self.sceneView?.commandQueue {
             if let encoder = self.sceneView.currentRenderCommandEncoder {

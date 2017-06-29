@@ -231,19 +231,17 @@ class VertBrush {
         
     }
     
-    func setupPipeline(device : MTLDevice) {
+    func setupPipeline(device : MTLDevice, pixelFormat : MTLPixelFormat ) {
         
         let defaultLibrary = device.makeDefaultLibrary()
         let fragmentProgram = defaultLibrary!.makeFunction(name: "basic_fragment")
         let vertexProgram = defaultLibrary!.makeFunction(name: "basic_vertex")
         
-        // TODO: get format from device
-        let pixFormat = MTLPixelFormat(rawValue: 551)
         
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.vertexFunction = vertexProgram
         pipelineStateDescriptor.fragmentFunction = fragmentProgram
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = pixFormat! //.bgra10_XR_sRGB
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         pipelineStateDescriptor.depthAttachmentPixelFormat = MTLPixelFormat.depth32Float
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add;
