@@ -7,6 +7,7 @@ import UIKit
 import SceneKit
 import ARKit
 import simd
+import Photos
 
 
 
@@ -80,6 +81,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     
     var videoRecorder : MetalVideoRecorder? = nil
     
+    var tempVideoUrl : URL? = nil
+    
     enum ColorMode : Int {
         case color
         case normal
@@ -89,6 +92,11 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     var currentColor : SCNVector3 = SCNVector3(1,0.5,0)
     var colorMode : ColorMode = .rainbow
     
+    // smooth the pointer position a bit
+    var avgPos : SCNVector3! = nil
+    
+    
+    // MARK: -
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -119,6 +127,20 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         self.sceneView.addGestureRecognizer(tap)
         
         
+        PHPhotoLibrary.requestAuthorization { status in
+            print(status)
+        }
+        
+    }
+    
+    var recordingOrientation : UIInterfaceOrientationMask? = nil
+    
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        if let orientation = recordingOrientation {
+            return orientation
+        } else {
+            return .all
+        }
     }
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
@@ -231,36 +253,28 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         if let rec = self.videoRecorder, rec.isRecording {
             
             rec.endRecording {
-                print("Recording done!")
+                
                 Haptics.strongBoom()
+                
                 DispatchQueue.main.async {
                     self.recordButton.alpha = 0.5
-                    //self.recordButton.backgroundColor = UIColor.black.withAlphaComponent(0.2)
+                    self.exportRecordedVideo()
+                    self.recordingOrientation = nil
                 }
             }
             
         } else {
             
-            var videoOutUrl : URL! = nil
             
-            for i in 0...1000 {
-                videoOutUrl = URL.documentsDirectory().appendingPathComponent("video_%i.mp4".format(i))
-                if !FileManager.default.fileExists(atPath: videoOutUrl.path) {
-                    break
-                }
+            let videoOutUrl = URL.documentsDirectory().appendingPathComponent("temp_video.mp4")
+            
+            if FileManager.default.fileExists(atPath: videoOutUrl.path) {
+                try! FileManager.default.removeItem(at: videoOutUrl)
             }
             
-            assert(videoOutUrl != nil )
-            
-            //let tex = renderer.renderDestination.currentDrawable!.texture
-            //let size = CGSize(width: tex.width, height: tex.height)
-            
-            //let size = (self.view as! MTKView).drawableSize
             let size = self.metalLayer.drawableSize
             
             
-            
-            print(" >> Init video with size: ", size )
             Haptics.strongBoom()
             
             let rec = MetalVideoRecorder(outputURL: videoOutUrl, size: size)
@@ -270,6 +284,48 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
             
             self.recordButton.alpha = 1.0
             
+            self.tempVideoUrl = videoOutUrl
+            
+            
+            
+            switch UIApplication.shared.statusBarOrientation {
+            case .landscapeLeft:
+                self.recordingOrientation = .landscapeLeft
+            case .landscapeRight:
+                self.recordingOrientation = .landscapeRight
+            case .portrait:
+                self.recordingOrientation = .portrait
+            case .portraitUpsideDown:
+                self.recordingOrientation = .portraitUpsideDown
+            case .unknown:
+                self.recordingOrientation = nil
+            }
+            
+        }
+        
+    }
+    
+    func exportRecordedVideo() {
+        
+        guard let videoUrl = self.tempVideoUrl else { return }
+        
+        PHPhotoLibrary.shared().performChanges({
+            
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoUrl)
+            
+        }) { saved, error in
+            
+            if !saved {
+                
+                DispatchQueue.main.async {
+                    let alertController = UIAlertController(title: "Error saving vidoe", message: nil, preferredStyle: .alert)
+                    let defaultAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+                    alertController.addAction(defaultAction)
+                    self.present(alertController, animated: true, completion: nil)
+                }
+            } else {
+                print(" Video exported")
+            }
         }
         
     }
@@ -301,8 +357,6 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         n.worldPosition = pos
         self.sceneView.scene.rootNode.addChildNode(n)
     }
-    
-    var avgPos : SCNVector3! = nil
     
     func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
         
@@ -370,9 +424,6 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
             
         }
         
-        if ( frameIdx % 100 == 0 ) {
-            print(vertBrush.points.count, " points")
-        }
         
         frameIdx = frameIdx + 1
         

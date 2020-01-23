@@ -28,9 +28,22 @@ class MetalVideoRecorder {
         // TODO: set bitrate sensibly
         // https://blog.testfairy.com/fine-tuned-video-compression-in-ios-swift-4-no-dependencies/
         
+        // AVVideoCodecType.h264 larger file size
+        
         let outputSettings: [String: Any] = [ AVVideoCodecKey : AVVideoCodecType.hevc,
-        AVVideoWidthKey : size.width,
-        AVVideoHeightKey : size.height]
+        AVVideoWidthKey : size.width/2,
+        AVVideoHeightKey : size.height/2,
+            
+            AVVideoCompressionPropertiesKey : [
+                    AVVideoQualityKey : 1.0,
+                    //AVVideoMaxKeyFrameIntervalKey : 5,
+                    //AVVideoAverageBitRateKey : 25500000
+            ]
+        
+        ]
+        
+        
+        
         
         assetWriterVideoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: outputSettings)
         assetWriterVideoInput.expectsMediaDataInRealTime = true
