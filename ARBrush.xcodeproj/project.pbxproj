@@ -17,11 +17,10 @@
 		425175371EFDA76700C6DD2B /* SCNVector3Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425175361EFDA1B200C6DD2B /* SCNVector3Extensions.swift */; };
 		425175381EFDA76A00C6DD2B /* float4x4+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425175351EFDA1B200C6DD2B /* float4x4+Extensions.swift */; };
 		4251753A1EFDA86200C6DD2B /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 425175391EFDA85F00C6DD2B /* Shaders.metal */; };
-		4251753D1EFDA9D600C6DD2B /* BufferProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251753B1EFDA9D400C6DD2B /* BufferProvider.swift */; };
-		4251753E1EFDA9D800C6DD2B /* Light.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251753C1EFDA9D400C6DD2B /* Light.swift */; };
-		425175401EFDAAB500C6DD2B /* Vertex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251753F1EFDAAB300C6DD2B /* Vertex.swift */; };
 		425175441EFDB6DC00C6DD2B /* plus@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 425175431EFDB6D000C6DD2B /* plus@2x.png */; };
 		42BA3DC11EFECAB300A4039A /* stop@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 42BA3DC01EFECAA700A4039A /* stop@2x.png */; };
+		42FB5BB423D946D100B53DBD /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42FB5BB323D946D100B53DBD /* Haptics.swift */; };
+		42FB5BB623D9477200B53DBD /* MetalVideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42FB5BB523D9477200B53DBD /* MetalVideoRecorder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,11 +36,12 @@
 		425175351EFDA1B200C6DD2B /* float4x4+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "float4x4+Extensions.swift"; sourceTree = "<group>"; };
 		425175361EFDA1B200C6DD2B /* SCNVector3Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCNVector3Extensions.swift; sourceTree = "<group>"; };
 		425175391EFDA85F00C6DD2B /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
-		4251753B1EFDA9D400C6DD2B /* BufferProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BufferProvider.swift; sourceTree = "<group>"; };
-		4251753C1EFDA9D400C6DD2B /* Light.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Light.swift; sourceTree = "<group>"; };
-		4251753F1EFDAAB300C6DD2B /* Vertex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vertex.swift; sourceTree = "<group>"; };
 		425175431EFDB6D000C6DD2B /* plus@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "plus@2x.png"; path = "images/plus@2x.png"; sourceTree = "<group>"; };
 		42BA3DC01EFECAA700A4039A /* stop@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "stop@2x.png"; path = "images/stop@2x.png"; sourceTree = "<group>"; };
+		42FB5BAD23D7AFB200B53DBD /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
+		42FB5BAF23D7AFF900B53DBD /* ARBrush-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ARBrush-Bridging-Header.h"; sourceTree = "<group>"; };
+		42FB5BB323D946D100B53DBD /* Haptics.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
+		42FB5BB523D9477200B53DBD /* MetalVideoRecorder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalVideoRecorder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +58,7 @@
 		425175121EFD9CB700C6DD2B = {
 			isa = PBXGroup;
 			children = (
+				42FB5BAF23D7AFF900B53DBD /* ARBrush-Bridging-Header.h */,
 				4251751D1EFD9CB700C6DD2B /* ARBrush */,
 				4251751C1EFD9CB700C6DD2B /* Products */,
 			);
@@ -77,6 +78,7 @@
 				425175321EFDA09100C6DD2B /* VertBrush.swift */,
 				4251751E1EFD9CB700C6DD2B /* AppDelegate.swift */,
 				425175221EFD9CB700C6DD2B /* ViewController.swift */,
+				42FB5BB323D946D100B53DBD /* Haptics.swift */,
 				425175341EFDA15400C6DD2B /* Metal */,
 				425175201EFD9CB700C6DD2B /* art.scnassets */,
 				425175241EFD9CB700C6DD2B /* Main.storyboard */,
@@ -91,11 +93,10 @@
 		425175341EFDA15400C6DD2B /* Metal */ = {
 			isa = PBXGroup;
 			children = (
-				4251753B1EFDA9D400C6DD2B /* BufferProvider.swift */,
-				4251753C1EFDA9D400C6DD2B /* Light.swift */,
+				42FB5BB523D9477200B53DBD /* MetalVideoRecorder.swift */,
+				42FB5BAD23D7AFB200B53DBD /* ShaderTypes.h */,
 				425175391EFDA85F00C6DD2B /* Shaders.metal */,
 				425175361EFDA1B200C6DD2B /* SCNVector3Extensions.swift */,
-				4251753F1EFDAAB300C6DD2B /* Vertex.swift */,
 				425175351EFDA1B200C6DD2B /* float4x4+Extensions.swift */,
 			);
 			name = Metal;
@@ -142,6 +143,7 @@
 				TargetAttributes = {
 					4251751A1EFD9CB700C6DD2B = {
 						CreatedOnToolsVersion = 9.0;
+						LastSwiftMigration = 1130;
 					};
 				};
 			};
@@ -184,14 +186,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				42FB5BB423D946D100B53DBD /* Haptics.swift in Sources */,
 				4251753A1EFDA86200C6DD2B /* Shaders.metal in Sources */,
-				4251753D1EFDA9D600C6DD2B /* BufferProvider.swift in Sources */,
-				425175401EFDAAB500C6DD2B /* Vertex.swift in Sources */,
 				425175331EFDA09100C6DD2B /* VertBrush.swift in Sources */,
+				42FB5BB623D9477200B53DBD /* MetalVideoRecorder.swift in Sources */,
 				425175231EFD9CB700C6DD2B /* ViewController.swift in Sources */,
 				4251751F1EFD9CB700C6DD2B /* AppDelegate.swift in Sources */,
 				425175381EFDA76A00C6DD2B /* float4x4+Extensions.swift in Sources */,
-				4251753E1EFDA9D800C6DD2B /* Light.swift in Sources */,
 				425175371EFDA76700C6DD2B /* SCNVector3Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -325,12 +326,15 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				DEVELOPMENT_TEAM = 34FWY7G2HB;
 				GCC_OPTIMIZATION_LEVEL = fast;
 				INFOPLIST_FILE = ARBrush/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = labs.laan.ARBrush;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "ARBrush-Bridging-Header.h";
 				SWIFT_VERSION = 4.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -340,11 +344,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				DEVELOPMENT_TEAM = 34FWY7G2HB;
 				INFOPLIST_FILE = ARBrush/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = labs.laan.ARBrush;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "ARBrush-Bridging-Header.h";
 				SWIFT_VERSION = 4.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

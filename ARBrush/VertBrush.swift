@@ -6,9 +6,11 @@
 
 import Foundation
 import SceneKit
+import ARKit
 
 let vertsPerPoint = 8
 let maxPoints = 20000
+
 
 
 class VertBrush {
@@ -19,15 +21,12 @@ class VertBrush {
     var indexBuffer: MTLBuffer! = nil
     
     var pipelineState: MTLRenderPipelineState! = nil
+    var depthState: MTLDepthStencilState!
     
     var previousSplitLine = false
     
-    var bufferProvider: BufferProvider! = nil
-    
-    
-    var vertices = [Vertex]()
     var points = [SCNVector3]()
-    var indices = Array<UInt32>()
+    
     
     var lastVertUpdateIdx = 0
     var lastIndexUpdateIdx = 0
@@ -35,13 +34,31 @@ class VertBrush {
     var prevPerpVec = SCNVector3Zero
     
     
-    var light = Light(color: (1.0,1.0,1.0), ambientIntensity: 0.1,
-                      direction: (0.0, 0.0, 1.0), diffuseIntensity: 0.8,
-                      shininess: 10, specularIntensity: 2, time: 0.0)
+    var currentVertIndex : Int = 0
+    var currentIndexIndex : Int = 0
     
+    func addVert( _ v : Vertex ) {
+        
+        let bufferContents = vertexBuffer.contents()
+        let buffer = bufferContents.assumingMemoryBound(to: Vertex.self)
+        buffer[currentVertIndex] = v
+        currentVertIndex += 1
+        
+    }
     
+    func addIndex( _ i : UInt32 ) {
+        
+        let bufferContents = indexBuffer.contents()
+        let buffer = bufferContents.assumingMemoryBound(to: UInt32.self)
+        buffer[currentIndexIndex] = i
+        currentIndexIndex += 1
+        
+    }
     
-    func addPoint( _ point : SCNVector3 , radius : Float = 0.01, splitLine : Bool = false ) {
+    func addPoint( _ point : SCNVector3 ,
+                   radius : Float = 0.01,
+                   color : SCNVector3,
+                   splitLine : Bool = false ) {
         
         if ( points.count >= maxPoints ) {
             print("Max points reached")
@@ -63,10 +80,12 @@ class VertBrush {
         //let green = 0.5 + 0.5*sin( 0.1 * Float(points.count) )
         
         func toVert(_ pp:SCNVector3, _ nn:SCNVector3 ) -> Vertex {
-            return Vertex(x: pp.x, y: pp.y, z: pp.z,
-                          r: 1.0, g: 0.5, b: 0.1, a: 1.0,
-                          s: 0, t: 0,
-                          nX: nn.x, nY: nn.y, nZ: nn.z)
+            
+            return Vertex(position: vector_float4.init(pp.x, pp.y, pp.z, 1.0),
+                            //color: vector_float4.init(1.0, green, 0.0, 1.0),
+                            color: vector_float4.init(color.x, color.y, color.z, 1.0),
+                            normal: vector_float4.init(nn.x, nn.y, nn.z, 1.0))
+            
         }
         
         let pidx = points.count - 1
@@ -94,18 +113,21 @@ class VertBrush {
                 
                 let angle = (Float(i) / Float(vertsPerPoint)) * Float.pi * 2.0
                 let v3 = SCNVector3Rotate(vector:v2, around:v1, radians:angle)
-                vertices.append(toVert(p2 + v3, v3.normalized()))
+                //vertices.append(toVert(p2 + v3, v3.normalized()))
+                addVert(toVert(p2 + v3, v3.normalized()))
                 
             }
         }
         
-        let idx_start : UInt32 = UInt32(vertices.count)
+        //let idx_start : UInt32 = UInt32(vertices.count)
+        let idx_start : UInt32 = UInt32(currentVertIndex)
         
         // add current point's verts
         for i in 0..<vertsPerPoint {
             let angle = (Float(i) / Float(vertsPerPoint)) * Float.pi * 2.0
             let v3 = SCNVector3Rotate(vector:v2, around:v1, radians:angle)
-            vertices.append(toVert(p1 + v3, v3.normalized()))
+            //vertices.append(toVert(p1 + v3, v3.normalized()))
+            addVert(toVert(p1 + v3, v3.normalized()))
         }
         
         // add triangles
@@ -118,23 +140,23 @@ class VertBrush {
             
             if ( i == vertsPerPoint-1 ) {
                 
-                indices.append( idx )
-                indices.append( idx - N )
-                indices.append( idx_start - N)
+                addIndex( idx )
+                addIndex( idx - N )
+                addIndex( idx_start - N)
+                addIndex( idx )
+                addIndex( idx_start - N )
+                addIndex( idx_start )
                 
-                indices.append( idx )
-                indices.append( idx_start - N )
-                indices.append( idx_start )
+                
                 
             } else {
                 
-                indices.append( idx )
-                indices.append( idx - N )
-                indices.append( idx - N + 1 )
-                
-                indices.append( idx )
-                indices.append( idx - N + 1 )
-                indices.append( idx + 1 )
+                addIndex( idx )
+                addIndex( idx - N )
+                addIndex( idx - N + 1 )
+                addIndex( idx )
+                addIndex( idx - N + 1 )
+                addIndex( idx + 1 )
                 
             }
         }
@@ -142,51 +164,43 @@ class VertBrush {
         
     }
     
-    func updateBuffers() {
-        if ( vertices.count == 0 ) {return}
-        objc_sync_enter(self)
-        updateIndexBuffer()
-        updateVertexBuffer()
-        objc_sync_exit(self)
-    }
-    
-    
-    func updateVertexBuffer() {
-        
-        let count = vertices.count
-        let num = count - lastVertUpdateIdx
-        let bufferPointer = vertexBuffer.contents()
-        let dataSize = num * MemoryLayout<Vertex>.size
-        let offset = lastVertUpdateIdx * MemoryLayout<Vertex>.size
-        
-        memcpy(bufferPointer + offset, &vertices+lastVertUpdateIdx, dataSize)
-        lastVertUpdateIdx = count
-        
-    }
-    
-    func updateIndexBuffer() {
-        
-        let count = indices.count
-        let num = count - lastIndexUpdateIdx
-        let bufferPointer = indexBuffer.contents()
-        let dataSize = num * 4
-        let offset = 4 * lastIndexUpdateIdx
-        memcpy(bufferPointer + offset, &indices+lastIndexUpdateIdx, dataSize)
-        lastIndexUpdateIdx = count
-        
-    }
- 
-    
     
     func clear() {
+        
         objc_sync_enter(self)
-        vertices.removeAll()
-        indices.removeAll()
-        points.removeAll()
+        
+        currentVertIndex = 0
+        currentIndexIndex = 0
+        
         objc_sync_exit(self)
     }
     
     // Metal
+    var uniforms : SharedUniforms = SharedUniforms()
+    
+    func updateSharedUniforms(frame: ARFrame) {
+        
+        // Set up lighting for the scene using the ambient intensity if provided
+        var ambientIntensity: Float = 1.0
+        
+        if let lightEstimate = frame.lightEstimate {
+            ambientIntensity = Float(lightEstimate.ambientIntensity) / 1000.0
+        }
+        
+        let ambientLightColor: vector_float3 = vector3(0.5, 0.5, 0.5)
+        uniforms.ambientLightColor = ambientLightColor * ambientIntensity
+        
+        var directionalLightDirection : vector_float3 = vector3(0.0, 0.0, -1.0)
+        directionalLightDirection = simd_normalize(directionalLightDirection)
+        uniforms.directionalLightDirection = directionalLightDirection
+        
+        let directionalLightColor: vector_float3 = vector3(0.6, 0.6, 0.6)
+        uniforms.directionalLightColor = directionalLightColor * ambientIntensity
+        
+        uniforms.materialShininess = 40
+        
+    }
+    
     
     func render(_ commandQueue: MTLCommandQueue,
                 _ renderEncoder: MTLRenderCommandEncoder,
@@ -194,44 +208,40 @@ class VertBrush {
                  projectionMatrix: float4x4) {
         
         
-        if ( indices.count == 0 ) {return}
+        if ( currentIndexIndex == 0 ) {return}
         
         objc_sync_enter(self)
         
+        
+        renderEncoder.setCullMode(.back)
         renderEncoder.setRenderPipelineState(pipelineState)
+        renderEncoder.setDepthStencilState(depthState)
+        
         renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         
-        light.time = light.time + 0.1
+        uniforms.viewMatrix = parentModelViewMatrix
+        uniforms.projectionMatrix = projectionMatrix
         
-        let uniformBuffer = bufferProvider.nextUniformsBuffer(projectionMatrix,
-                                                              modelViewMatrix: parentModelViewMatrix,
-                                                              light: light)
+        // Here we pass the SharedUniforms using setVertexBytes because it's simpler
+        // than triple buffering. Note there is a 4kb limit on how many bytes.
+        // https://developer.apple.com/documentation/metal/mtlrendercommandencoder/1515846-setvertexbytes
         
-        renderEncoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
-        renderEncoder.setFragmentBuffer(uniformBuffer, offset: 0, index: 1)
-        
-        //renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+        renderEncoder.setVertexBytes(&uniforms, length: MemoryLayout<SharedUniforms>.stride, index: 1)
+        renderEncoder.setFragmentBytes(&uniforms, length: MemoryLayout<SharedUniforms>.stride, index: 1)
         
         renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                            indexCount: indices.count,
+                                            indexCount: currentIndexIndex,
                                             indexType: MTLIndexType.uint32,
                                             indexBuffer: indexBuffer,
                                             indexBufferOffset: 0)
-        
-//        currentBufferIdx += 1
-//
-//        if ( currentBufferIdx == numBuffers ) {
-//            currentBufferIdx = 0
-//        }
+            
         
         objc_sync_exit(self)
-        
-        //self.bufferProvider.avaliableResourcesSemaphore.signal()
         
         
     }
     
-    func setupPipeline(device : MTLDevice, pixelFormat : MTLPixelFormat ) {
+    func setupPipeline(device : MTLDevice, renderDestination : ARSCNView ) {
         
         let defaultLibrary = device.makeDefaultLibrary()
         let fragmentProgram = defaultLibrary!.makeFunction(name: "basic_fragment")
@@ -241,8 +251,11 @@ class VertBrush {
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.vertexFunction = vertexProgram
         pipelineStateDescriptor.fragmentFunction = fragmentProgram
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineStateDescriptor.depthAttachmentPixelFormat = MTLPixelFormat.depth32Float
+        
+        
+        pipelineStateDescriptor.colorAttachments[0].pixelFormat = renderDestination.colorPixelFormat
+        pipelineStateDescriptor.depthAttachmentPixelFormat = renderDestination.depthPixelFormat
+        
         pipelineStateDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperation.add;
         pipelineStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperation.add;
@@ -253,18 +266,18 @@ class VertBrush {
         
         pipelineState = try! device.makeRenderPipelineState(descriptor: pipelineStateDescriptor)
         
-        let vertDataSize = vertsPerPoint * maxPoints * MemoryLayout<Vertex>.size
-        let indexDataSize = 3 * vertsPerPoint * maxPoints * MemoryLayout<Float>.size
         
-//        for _ in 0..<numBuffers {
-//            vertexBuffers.append( device.makeBuffer(length: vertDataSize, options: [])! )
-//            indexBuffers.append( device.makeBuffer(length: indexDataSize, options: [])! )
-//        }
+        let depthStateDescriptor = MTLDepthStencilDescriptor()
+        depthStateDescriptor.depthCompareFunction = .greater
+        depthStateDescriptor.isDepthWriteEnabled = true
         
-        vertexBuffer = device.makeBuffer(length: vertDataSize, options: [])
-        indexBuffer = device.makeBuffer(length: indexDataSize, options: [])
+        depthState = device.makeDepthStencilState(descriptor: depthStateDescriptor)
         
-        self.bufferProvider = BufferProvider(device: device, inflightBuffersCount: 3)
+        let vertDataSize = vertsPerPoint * maxPoints * MemoryLayout<Vertex>.stride
+        let indexDataSize = 3 * vertsPerPoint * maxPoints * MemoryLayout<Float>.stride
+                
+        vertexBuffer = device.makeBuffer(length: vertDataSize, options: .storageModeShared)
+        indexBuffer = device.makeBuffer(length: indexDataSize, options: .storageModeShared)
         
         
     }

@@ -1,149 +1,126 @@
-/**
- * Copyright (c) 2016 Razeware LLC
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 
 #include <metal_stdlib>
+#include <simd/simd.h>
+
+// Include header shared between this Metal shader code and C code executing Metal API commands
+#import "ShaderTypes.h"
+
+
 using namespace metal;
 
-// 1
-struct VertexIn {
-  packed_float3 position;
-  packed_float4 color;
-  packed_float2 texCoord;
-  packed_float3 normal;
-};
 
 struct VertexOut {
-  float4 position [[position]];
-  float3 fragmentPosition;
-  float4 color;
-  float2 texCoord;
-  float3 normal;
+    float4 position [[position]];
+    float3 fragmentPosition;
+    float4 color;
+    float2 texCoord;
+    half3  eyePosition;
+    float3 normal;
     float vid;
 };
 
-struct Light {
-  packed_float3 color;      // 0 - 2
-  float ambientIntensity;          // 3
-  packed_float3 direction;  // 4 - 6
-  float diffuseIntensity;   // 7
-  float shininess;          // 8
-  float specularIntensity;  // 9
-    float time;
-  
-  /*
-   _______________________
-   |0 1 2 3|4 5 6 7|8 9    |
-   -----------------------
-   |       |       |       |
-   | chunk0| chunk1| chunk2|
-   */
-};
-
-struct Uniforms{
-  float4x4 modelMatrix;
-  float4x4 projectionMatrix;
-  Light light;
-};
 
 vertex VertexOut basic_vertex(
-                              const device VertexIn* vertex_array [[ buffer(0) ]],
-                              const device Uniforms&  uniforms    [[ buffer(1) ]],
-                              unsigned int vid [[ vertex_id ]]) {
-  
-  float4x4 mv_Matrix = uniforms.modelMatrix;
-  float4x4 proj_Matrix = uniforms.projectionMatrix;
-  
-  VertexIn VertexIn = vertex_array[vid];
+                              const device Vertex* vertex_array [[ buffer(0) ]],
+                              constant SharedUniforms &uniforms [[ buffer(1) ]],
+                              unsigned int vid [[ vertex_id ]] )
+{
+
+    float4x4 mv_Matrix = uniforms.viewMatrix;
+    float4x4 proj_Matrix = uniforms.projectionMatrix;
+
     
-    //float3 newPos = VertexIn.position + VertexIn.normal * sin(uniforms.light.time*3 + VertexIn.position[1] * 100.0 ) * 0.001;
-    //float3 newPos = VertexIn.position + VertexIn.normal * (0.8+sin(uniforms.light.time*3 + vid * 0.1 )) * 0.002;
-    float3 newPos = VertexIn.position + VertexIn.normal * (0.8+sin(uniforms.light.time*3 + vid * 0.05 )) * 0.001;
+    Vertex in = vertex_array[vid];
     
-  VertexOut VertexOut;
-  VertexOut.position = proj_Matrix * mv_Matrix * float4(newPos,1);
-  VertexOut.fragmentPosition = (mv_Matrix * float4(VertexIn.position,1)).xyz;
-  VertexOut.color = VertexIn.color;
-  // 2
-  VertexOut.texCoord = VertexIn.texCoord;
-  VertexOut.normal = (mv_Matrix * float4(VertexIn.normal, 0.0)).xyz;
-    VertexOut.vid = vid;
+    // + VertexIn.normal * (0.8+sin(uniforms.light.time*3 + vid * 0.05 )) * 0.001;
     
-  return VertexOut;
+    float3 pos = in.position.xyz;
+    
+    VertexOut out;
+    
+    out.position = proj_Matrix * mv_Matrix * float4(pos, 1);
+    
+    out.position.z = out.position.z / out.position.w;
+    out.position.z = 1.0 - out.position.z;
+    out.position.z = out.position.z * out.position.w;
+    
+    
+    out.eyePosition = half3((mv_Matrix * float4(pos, 1)).xyz);
+    
+    out.fragmentPosition = out.position.xyz;
+    out.color.rgb = in.color.rgb;
+    
+    
+    out.normal = (mv_Matrix * float4(in.normal.xyz, 0.0)).xyz;
+    out.vid = vid;
+    
+    return out;
+    
 }
 
 
-// 3
-fragment float4 basic_fragment(VertexOut interpolated [[stage_in]],
-                               const device Uniforms&  uniforms    [[ buffer(1) ]]
+//constant SharedUniforms &sharedUniforms [[ buffer(kBufferIndexSharedUniforms) ]]
+
+fragment float4 basic_fragment(VertexOut in [[stage_in]],
+                               constant SharedUniforms &uniforms [[ buffer(1) ]]
                                ) {
     
-    // Ambient
-    Light light = uniforms.light;
-    float4 ambientColor = float4(light.color * light.ambientIntensity, 1);
     
-    //Diffuse
-    float diffuseFactor = max(0.0,dot(interpolated.normal, float3(light.direction))); // 1
-    float4 diffuseColor = float4(light.color * light.diffuseIntensity * diffuseFactor ,1.0); // 2
+    float3 normal = float3(in.normal);
     
-    //Specular
-    float3 eye = normalize(interpolated.fragmentPosition); //1
-    float3 reflection = reflect(float3(light.direction), interpolated.normal); // 2
-    float specularFactor = pow(max(0.0, dot(reflection, eye)), light.shininess); //3
-    float4 specularColor = float4(light.color * light.specularIntensity * specularFactor ,1.0);//4
+    // Calculate the contribution of the directional light as a sum of diffuse and specular terms
+    float3 directionalContribution = float3(0);
+    {
+        // Light falls off based on how closely aligned the surface normal is to the light direction
+        float nDotL = saturate(dot(normal, -uniforms.directionalLightDirection));
+        
+        // The diffuse term is then the product of the light color, the surface material
+        // reflectance, and the falloff
+        float3 diffuseTerm = uniforms.directionalLightColor * nDotL;
+        
+        // Apply specular lighting...
+        
+        // 1) Calculate the halfway vector between the light direction and the direction they eye is looking
+        float3 halfwayVector = normalize(-uniforms.directionalLightDirection - float3(in.eyePosition));
+        
+        // 2) Calculate the reflection angle between our reflection vector and the eye's direction
+        float reflectionAngle = saturate(dot(normal, halfwayVector));
+        
+        // 3) Calculate the specular intensity by multiplying our reflection angle with our object's
+        //    shininess
+        float specularIntensity = saturate(powr(reflectionAngle, uniforms.materialShininess));
+        
+        // 4) Obtain the specular term by multiplying the intensity by our light's color
+        float3 specularTerm = uniforms.directionalLightColor * specularIntensity;
+        
+        // Calculate total contribution from this light is the sum of the diffuse and specular values
+        directionalContribution = diffuseTerm + specularTerm;
+    }
     
-    float4 norm = float4(interpolated.normal, 1.0);
+    // The ambient contribution, which is an approximation for global, indirect lighting, is
+    // the product of the ambient light intensity multiplied by the material's reflectance
+    float3 ambientContribution = uniforms.ambientLightColor;
     
-    //norm.r += 0.4 * sin( interpolated.vid * 0.1 );
+    // Now that we have the contributions our light sources in the scene, we sum them together
+    // to get the fragment's lighting value
+    float3 lightContributions = ambientContribution + directionalContribution;
     
-    // 5
-    //float4 color = float4(1.0,0.5,0.1,1.0); //tex2D.sample(sampler2D, interpolated.texCoord);
-    //return color * (ambientColor + diffuseColor + specularColor);
-    return norm * (ambientColor + diffuseColor + specularColor);
-    //return color;
+    // We compute the final color by multiplying the sample from our color maps by the fragment's
+    // lighting value
+    
+    // Hack: if the color is negative, use the normal as the color
+    if ( in.color.x < -0.5 ) {
+        in.color.rgb = normal.rgb;
+    }
+    
+    float3 color = in.color.rgb * lightContributions;
+    
+    // We use the color we just computed and the alpha channel of our
+    // colorMap for this fragment's alpha value
+    return float4(color, in.color.w);
+    
+    
+    //return norm * (ambientColor + diffuseColor + specularColor);
+    
+    
 }
-
-
-//// 3
-//fragment float4 basic_fragment(VertexOut interpolated [[stage_in]],
-//                               const device Uniforms&  uniforms    [[ buffer(1) ]],
-//                               texture2d<float>  tex2D     [[ texture(0) ]],
-//                               sampler           sampler2D [[ sampler(0) ]]) {
-//
-//  // Ambient
-//  Light light = uniforms.light;
-//  float4 ambientColor = float4(light.color * light.ambientIntensity, 1);
-//
-//  //Diffuse
-//  float diffuseFactor = max(0.0,dot(interpolated.normal, light.direction)); // 1
-//  float4 diffuseColor = float4(light.color * light.diffuseIntensity * diffuseFactor ,1.0); // 2
-//
-//  //Specular
-//  float3 eye = normalize(interpolated.fragmentPosition); //1
-//  float3 reflection = reflect(light.direction, interpolated.normal); // 2
-//  float specularFactor = pow(max(0.0, dot(reflection, eye)), light.shininess); //3
-//  float4 specularColor = float4(light.color * light.specularIntensity * specularFactor ,1.0);//4
-//
-//  // 5
-//  float4 color = tex2D.sample(sampler2D, interpolated.texCoord);
-//  return color * (ambientColor + diffuseColor + specularColor);
-//}
-

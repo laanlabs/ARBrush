@@ -9,6 +9,7 @@ import ARKit
 import simd
 
 
+
 func getRoundyButton(size: CGFloat = 100,
                      imageName : String,
                      _ colorTop : UIColor ,
@@ -37,6 +38,26 @@ func getRoundyButton(size: CGFloat = 100,
     
 }
 
+extension URL {
+    
+    static func documentsDirectory() -> URL {
+        
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let documentsDirectory = paths[0]
+        return documentsDirectory
+        
+    }
+}
+
+extension String {
+
+    // Python-y formatting:  "blah %i".format(4)
+    func format(_ args: CVarArg...) -> String {
+        return NSString(format: self, arguments: getVaList(args)) as String
+    }
+    
+}
+
 
 
 class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDelegate {
@@ -45,13 +66,29 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     
     let vertBrush = VertBrush()
     var buttonDown = false
-    var addPointButton : UIButton!
+    
+    var clearDrawingButton : UIButton!
+    var toggleModeButton : UIButton!
+    var recordButton : UIButton!
+    
     var frameIdx = 0
     var splitLine = false
     var lineRadius : Float = 0.001
     
     var metalLayer: CAMetalLayer! = nil
     var hasSetupPipeline = false
+    
+    var videoRecorder : MetalVideoRecorder? = nil
+    
+    enum ColorMode : Int {
+        case color
+        case normal
+        case rainbow
+    }
+    
+    var currentColor : SCNVector3 = SCNVector3(1,0.5,0)
+    var colorMode : ColorMode = .rainbow
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -69,17 +106,18 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         // Set the scene to the view
         sceneView.scene = scene
         
-        metalLayer = self.sceneView.layer as! CAMetalLayer
+        metalLayer = self.sceneView.layer as? CAMetalLayer
         
+        metalLayer.framebufferOnly = false
         
-        //addButton()
+        addButtons()
         
-        //self.view.addGestureRecognizer(UIGestureRecognizer.)
         let tap = UILongPressGestureRecognizer(target: self, action: #selector(tapHandler))
         tap.minimumPressDuration = 0
         tap.cancelsTouchesInView = false
         tap.delegate = self
         self.sceneView.addGestureRecognizer(tap)
+        
         
     }
     
@@ -87,16 +125,29 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         return touch.view == gestureRecognizer.view
     }
     
+    var touchLocation : CGPoint = .zero
+    
     // called by gesture recognizer
     @objc func tapHandler(gesture: UITapGestureRecognizer) {
         
         // handle touch down and touch up events separately
         if gesture.state == .began {
-            // do something...
+            
+            self.touchLocation = self.sceneView.center
             buttonTouchDown()
+            
         } else if gesture.state == .ended { // optional for touch up event catching
-            // do something else...
+            
             buttonTouchUp()
+            
+        } else if gesture.state == .changed {
+            
+            if buttonDown {
+                // You can use this to draw with touch location rather than
+                // center screen
+                //self.touchLocation = gesture.location(in: self.sceneView)
+            }
+            
         }
     }
     
@@ -105,12 +156,10 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         
         
         // Create a session configuration
-      let configuration = ARWorldTrackingConfiguration()
+        let configuration = ARWorldTrackingConfiguration()
         
         // Run the view's session
         sceneView.session.run(configuration)
-        
-        //vertBrush.setupPipeline(device: sceneView.device!, pixelFormat: self.metalLayer.pixelFormat )
         
     }
     
@@ -126,39 +175,109 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         // Release any cached data, images, etc that aren't in use.
     }
     
-    func addButton() {
+    func addButtons() {
         
+        let c1 = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.6)
+        let c2 = UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 0.6)
+        let c3 = UIColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 0.6)
+        
+        clearDrawingButton = getRoundyButton(size: 55, imageName: "stop", c1, c2)
+        clearDrawingButton.addTarget(self, action:#selector(self.clearDrawing), for: .touchUpInside)
+        self.view.addSubview(clearDrawingButton)
+        
+        toggleModeButton = getRoundyButton(size: 55, imageName: "plus", c1, c3)
+        toggleModeButton.addTarget(self, action:#selector(self.toggleColorMode), for: .touchUpInside)
+        self.view.addSubview(toggleModeButton)
+        
+        recordButton = getRoundyButton(size: 55, imageName: "", .red, .red)
+        recordButton.addTarget(self, action:#selector(self.recordTapped), for: .touchUpInside)
+        self.view.addSubview(recordButton)
+        
+    }
+    
+    override func viewDidLayoutSubviews() {
         let sw = self.view.bounds.size.width
         let sh = self.view.bounds.size.height
         
-        // red
-        let c1 = UIColor(red: 246.0/255.0, green: 205.0/255.0, blue: 73.0/255.0, alpha: 1.0)
-        let c2 = UIColor(red: 230.0/255.0, green: 98.0/255.0, blue: 87.0/255.0, alpha: 1.0)
+        let off : CGFloat = 50
+        clearDrawingButton.center = CGPoint(x: sw - off, y: sh - off )
         
-        // greenish
-        //let c1 = UIColor(red: 112.0/255.0, green: 219.0/255.0, blue: 155.0/255.0, alpha: 1.0)
-        //let c2 = UIColor(red: 86.0/255.0, green: 197.0/255.0, blue: 238.0/255.0, alpha: 1.0)
         
-        addPointButton = getRoundyButton(size: 60, imageName: "stop", c1, c2)
-        //addPointButton.setTitle("+", for: UIControlState.normal)
+        toggleModeButton.center = CGPoint(x: off, y: sh - off)
         
-        self.view.addSubview(addPointButton)
-        addPointButton.center = CGPoint.init(x: sw / 2.0, y: 120 )
-        //addPointButton.addTarget(self, action:#selector(self.buttonTouchDown), for: .touchDown)
-        addPointButton.addTarget(self, action:#selector(self.clearDrawing), for: .touchUpInside)
-        //addPointButton.addTarget(self, action:#selector(self.buttonTouchUp), for: .touchUpOutside)
+        
+        recordButton.center = CGPoint(x: sw/2.0, y: sh - off)
+    }
+    
+    // MARK: - Buttons
+    
+    @objc func toggleColorMode() {
+        
+        Haptics.strongBoom()
+        self.colorMode = ColorMode(rawValue: (self.colorMode.rawValue + 1) % 3)!
         
     }
     
-    
-    
     @objc func clearDrawing() {
+        
+        Haptics.threeWeakBooms()
         vertBrush.clear()
     }
     
+    
+    @objc func recordTapped() {
+        
+        if let rec = self.videoRecorder, rec.isRecording {
+            
+            rec.endRecording {
+                print("Recording done!")
+                Haptics.strongBoom()
+                DispatchQueue.main.async {
+                    self.recordButton.backgroundColor = UIColor.black.withAlphaComponent(0.2)
+                }
+            }
+            
+        } else {
+            
+            var videoOutUrl : URL! = nil
+            
+            for i in 0...1000 {
+                videoOutUrl = URL.documentsDirectory().appendingPathComponent("video_%i.mp4".format(i))
+                if !FileManager.default.fileExists(atPath: videoOutUrl.path) {
+                    break
+                }
+            }
+            
+            assert(videoOutUrl != nil )
+            
+            //let tex = renderer.renderDestination.currentDrawable!.texture
+            //let size = CGSize(width: tex.width, height: tex.height)
+            
+            //let size = (self.view as! MTKView).drawableSize
+            let size = self.metalLayer.drawableSize
+            
+            
+            
+            print(" >> Init video with size: ", size )
+            Haptics.strongBoom()
+            
+            let rec = MetalVideoRecorder(outputURL: videoOutUrl, size: size)
+            rec?.startRecording()
+            
+            self.videoRecorder = rec
+            
+            self.recordButton.backgroundColor = UIColor.red.withAlphaComponent(0.9)
+            
+        }
+        
+    }
+    
+    
+    // MARK: - Touch
     @objc func buttonTouchDown() {
         splitLine = true
         buttonDown = true
+        avgPos = nil
     }
     @objc func buttonTouchUp() {
         buttonDown = false
@@ -166,28 +285,38 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     
     // MARK: - ARSCNViewDelegate
     
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
+    // Test mixing with scenekit content
+    func addBall( _ pos : SCNVector3 ) {
+        let b = SCNSphere(radius: 0.05)
+        b.firstMaterial?.diffuse.contents = UIColor.red
+        let n = SCNNode(geometry: b)
+        n.worldPosition = pos
+        self.sceneView.scene.rootNode.addChildNode(n)
     }
-*/
     
-    //var prevTime : TimeInterval = -1
+    var avgPos : SCNVector3! = nil
     
     func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
         
+        let pointer = getPointerPosition()
+        
+        if avgPos == nil {
+            avgPos = pointer.pos
+        }
+        
+        avgPos = avgPos - (avgPos - pointer.pos) * 0.4;
+        
         if ( buttonDown ) {
+                        
+            if vertBrush.points.count % 100 == 0 {
+                self.addBall(pointer.pos)
+            }
             
-            let pointer = getPointerPosition()
             if ( pointer.valid ) {
                 
                 if ( vertBrush.points.count == 0 || (vertBrush.points.last! - pointer.pos).length() > 0.001 ) {
                     
                     var radius : Float = 0.001
-                    
                     
                     if ( splitLine || vertBrush.points.count < 2 ) {
                         lineRadius = 0.001
@@ -202,7 +331,32 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
                     }
                     
                     lineRadius = lineRadius - (lineRadius - radius)*0.075
-                    vertBrush.addPoint(pointer.pos, radius: lineRadius, splitLine:splitLine)
+                    
+                    var color : SCNVector3
+                    
+                    switch colorMode {
+                        
+                        case .rainbow:
+                            
+                            let hue : CGFloat = CGFloat(fmodf(Float(vertBrush.points.count) / 30.0, 1.0))
+                            let c = UIColor.init(hue: hue, saturation: 0.95, brightness: 0.95, alpha: 1.0)
+                            var red : CGFloat = 0.0; var green : CGFloat = 0.0; var blue : CGFloat = 0.0;
+                            c.getRed(&red, green: &green, blue: &blue, alpha: nil)
+                            color = SCNVector3(red, green, blue)
+                            
+                        case .normal:
+                            // Hack: if the color is negative, use the normal as the color
+                            color = SCNVector3(-1, -1, -1)
+                            
+                        case .color:
+                            color = self.currentColor
+                    
+                    }
+                    
+                    vertBrush.addPoint(avgPos,
+                                       radius: lineRadius,
+                                       color: color,
+                                       splitLine:splitLine)
                     
                     if ( splitLine ) { splitLine = false }
                     
@@ -218,18 +372,22 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         
         frameIdx = frameIdx + 1
         
-        //if ( frameIdx % 2 == 0 ) {
-            vertBrush.updateBuffers()
-        //}
-        
     }
+    
+    
     
     func renderer(_ renderer: SCNSceneRenderer, didRenderScene scene: SCNScene, atTime time: TimeInterval) {
         
+
         if ( !hasSetupPipeline ) {
             // pixelFormat is different if called at viewWillAppear
             hasSetupPipeline = true
-            vertBrush.setupPipeline(device: sceneView.device!, pixelFormat: self.metalLayer.pixelFormat )
+            
+            vertBrush.setupPipeline(device: sceneView.device!, renderDestination: self.sceneView! )
+        }
+        
+        guard let frame = self.sceneView.session.currentFrame else {
+            return
         }
         
         if let commandQueue = self.sceneView?.commandQueue {
@@ -238,12 +396,31 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
                 let projMat = float4x4.init((self.sceneView.pointOfView?.camera?.projectionTransform)!)
                 let modelViewMat = float4x4.init((self.sceneView.pointOfView?.worldTransform)!).inverse
                 
+                vertBrush.updateSharedUniforms(frame: frame)
                 vertBrush.render(commandQueue, encoder, parentModelViewMatrix: modelViewMat, projectionMatrix: projMat)
+                
                 
             }
         }
         
+        
+        
+        // This is not the right way to do this ..
+        // seems to work though
+        DispatchQueue.global(qos: .userInteractive).async {
+
+            if let recorder = self.videoRecorder,
+                recorder.isRecording {
+
+                if let tex = self.metalLayer.nextDrawable()?.texture {
+                    recorder.writeFrame(forTexture: tex)
+                }
+            }
+        }
+        
     }
+    
+
     
     func session(_ session: ARSession, didFailWithError error: Error) {
         // Present an error message to the user
@@ -260,19 +437,27 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         
     }
     
-    // MARK: stuff
+    // MARK: -
     
     func getPointerPosition() -> (pos : SCNVector3, valid: Bool, camPos : SCNVector3 ) {
+        
+        // Un-project a 2d screen location into ARKit world space using the 'unproject'
+        // function. 
         
         guard let pointOfView = sceneView.pointOfView else { return (SCNVector3Zero, false, SCNVector3Zero) }
         guard let currentFrame = sceneView.session.currentFrame else { return (SCNVector3Zero, false, SCNVector3Zero) }
         
-        let mat = SCNMatrix4.init(currentFrame.camera.transform)
-        let dir = SCNVector3(-1 * mat.m31, -1 * mat.m32, -1 * mat.m33)
+        let cameraPos = SCNVector3(currentFrame.camera.transform.translation)
         
-        let currentPosition = pointOfView.position + (dir * 0.12)
+        let touchLocationVec = SCNVector3(x: Float(touchLocation.x), y: Float(touchLocation.y), z: 0.01)
         
-        return (currentPosition, true, pointOfView.position)
+        let screenPosOnFarClippingPlane = self.sceneView.unprojectPoint(touchLocationVec)
+        
+        let dir = (screenPosOnFarClippingPlane - cameraPos).normalized()
+        
+        let worldTouchPos = cameraPos + dir * 0.12
+
+        return (worldTouchPos, true, pointOfView.position)
         
     }
     
