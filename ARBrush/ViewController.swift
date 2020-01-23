@@ -177,9 +177,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     
     func addButtons() {
         
-        let c1 = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.6)
-        let c2 = UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 0.6)
-        let c3 = UIColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 0.6)
+        let c1 = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.4)
+        let c2 = UIColor(red: 0.6, green: 0.0, blue: 0.0, alpha: 0.4)
+        let c3 = UIColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 0.4)
         
         clearDrawingButton = getRoundyButton(size: 55, imageName: "stop", c1, c2)
         clearDrawingButton.addTarget(self, action:#selector(self.clearDrawing), for: .touchUpInside)
@@ -189,8 +189,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         toggleModeButton.addTarget(self, action:#selector(self.toggleColorMode), for: .touchUpInside)
         self.view.addSubview(toggleModeButton)
         
-        recordButton = getRoundyButton(size: 55, imageName: "", .red, .red)
+        recordButton = getRoundyButton(size: 55, imageName: "", UIColor.red.withAlphaComponent(0.5), UIColor.red.withAlphaComponent(0.5))
         recordButton.addTarget(self, action:#selector(self.recordTapped), for: .touchUpInside)
+        recordButton.alpha = 0.5
         self.view.addSubview(recordButton)
         
     }
@@ -233,7 +234,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
                 print("Recording done!")
                 Haptics.strongBoom()
                 DispatchQueue.main.async {
-                    self.recordButton.backgroundColor = UIColor.black.withAlphaComponent(0.2)
+                    self.recordButton.alpha = 0.5
+                    //self.recordButton.backgroundColor = UIColor.black.withAlphaComponent(0.2)
                 }
             }
             
@@ -266,7 +268,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
             
             self.videoRecorder = rec
             
-            self.recordButton.backgroundColor = UIColor.red.withAlphaComponent(0.9)
+            self.recordButton.alpha = 1.0
             
         }
         
@@ -278,6 +280,12 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         splitLine = true
         buttonDown = true
         avgPos = nil
+        
+//        let pointer = getPointerPosition()
+//        if pointer.valid {
+//            self.addBall(pointer.pos)
+//        }
+        
     }
     @objc func buttonTouchUp() {
         buttonDown = false
@@ -287,7 +295,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
     
     // Test mixing with scenekit content
     func addBall( _ pos : SCNVector3 ) {
-        let b = SCNSphere(radius: 0.05)
+        let b = SCNSphere(radius: 0.01)
         b.firstMaterial?.diffuse.contents = UIColor.red
         let n = SCNNode(geometry: b)
         n.worldPosition = pos
@@ -307,10 +315,6 @@ class ViewController: UIViewController, ARSCNViewDelegate, UIGestureRecognizerDe
         avgPos = avgPos - (avgPos - pointer.pos) * 0.4;
         
         if ( buttonDown ) {
-                        
-            if vertBrush.points.count % 100 == 0 {
-                self.addBall(pointer.pos)
-            }
             
             if ( pointer.valid ) {
                 
